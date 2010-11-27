@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 #  Copyright 2010 Randolph C Voorhies
+#  http://ilab.usc.edu/~rand
 #  This program is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation, either version 3 of the License, or
@@ -129,12 +130,13 @@ class RandTermFrame(wx.Frame):
     lowerAreaSizer.Add(inputAreasSizer)
     self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
                                        style=wx.RA_VERTICAL, label="Input Type",
-                                       choices = ('String', 'Decimal', 'Hex', 'Binary'),
+                                       choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
                                        size=(100,25*len(self.inputAreas)))
     lowerAreaSizer.Add(self.inputTypeRadios)
     mainSizer.Add(lowerAreaSizer, 1)
 
     # Setup and get ready to roll
+    self.serialCon = serial.Serial()
     self.SetStatusText('Not Connected...')
     self.SetSizer(mainSizer)
     self.Show(True)
@@ -153,15 +155,12 @@ class RandTermFrame(wx.Frame):
     baudRadio   = None
     for b in self.baudRadios:   
       if b.IsChecked(): baudRadio   = b
-
     parityRadio = None
     for p in self.parityRadios:
       if p.IsChecked(): parityRadio = p
-
     byteRadio   = None
     for b in self.byteRadios:
       if b.IsChecked(): byteRadio   = b
-
     stopRadio   = None
     for s in self.stopbitsRadios:
       if s.IsChecked(): stopRadio   = s
@@ -196,16 +195,16 @@ class RandTermFrame(wx.Frame):
     inputVal = ''
     typeString = self.inputTypeRadios.GetStringSelection()
 
-    if(typeString == 'String'):
+    if(typeString == 'Ascii'):
       inputVal = str(inputString)
     else:
       base = 0
-      if(typeString == 'Decimal'):
+      if(typeString == 'Binary'):
+        base = 2
+      elif(typeString   == 'Decimal'):
         base = 10
       elif(typeString == 'Hex'):
         base = 16
-      elif(typeString == 'Binary'):
-        base = 2
       numStrings = inputString.split(" ")
       for numString in numStrings:
         intVal = int(numString, base)
