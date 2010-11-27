@@ -15,73 +15,211 @@
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import wx
+import serial
 
+parityMap = {
+  'None':  serial.PARITY_NONE,
+  'Even':  serial.PARITY_EVEN,
+  'Odd':   serial.PARITY_ODD,
+  'Mark':  serial.PARITY_MARK,
+  'Space': serial.PARITY_SPACE
+}
+
+stopMap = {
+  '1':   serial.STOPBITS_ONE,
+  '1.5': serial.STOPBITS_ONE_POINT_FIVE,
+  '2':   serial.STOPBITS_TWO
+}
+
+bytesizeMap = {
+  '5': serial.FIVEBITS,
+  '6': serial.SIXBITS,
+  '7': serial.SEVENBITS,
+  '8': serial.EIGHTBITS
+}
 
 
 class RandTermFrame(wx.Frame):
   def __init__(self, parent, title):
 
-    wx.Frame.__init__(self, parent, title=title, size=(200, 400))
-    
-    self.control = wx.TextVtrl(self, style=wx.TE_MULTILINE)
+    wx.Frame.__init__(self, parent, title=title, size=(600, 400))
 
     self.CreateStatusBar()
-
     # File Menu
     fileMenu = wx.Menu()
     menuAbout = fileMenu.Append(
       wx.ID_ABOUT, "&About", " Information about RandTerm")
+    self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
     menuExit = fileMenu.Append(wx.ID_EXIT, "E&xit", " Exit")
+    self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
 
     # Connect Menu
     self.connectMenu = wx.Menu()
-    ## Port SubMenu
-    self.portMenu = wxMenu()
-    self.portMenu.Append(wx_IDANY, 'Reload Port List')
-    self.portMenu.AppendSeparator()
+    ## Port Selection
+    self.setPort = self.connectMenu.Append(wx.ID_ANY, 'Set Port...')
+    self.Bind(wx.EVT_MENU, self.OnSetPort, self.setPort)
+    self.connectMenu.AppendSeparator()
+    self.portName = ""
     ## Baud SubMenu
-    self.baudMenu = wxMenu()
-    self.baudMenu.AppendRadioItem(wx_IDANY, '2400')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '4800')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '9600')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '19200')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '38400')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '57600')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '115200')
-    self.baudMenu.AppendRadioItem(wx_IDANY, '31250')
-    ## Flow Control SubMenu
-    self.flowMenu.AppendRadioItem(wx_IDANY, 'Hard')
-    self.flowMenu.AppendRadioItem(wx_IDANY, 'Soft')
-    self.flowMenu.AppendRadioItem(wx_IDANY, 'None')
+    self.baudRadios = []
+    self.baudMenu = wx.Menu()
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '2400'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '4800'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '9600'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '19200'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '38400'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '57600'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '115200'))
+    self.baudRadios.append(self.baudMenu.AppendRadioItem(wx.ID_ANY, '312500'))
+    self.connectMenu.AppendMenu(wx.ID_ANY, 'Baud Rate',     self.baudMenu)
     ## Parity SubMenu
-    self.parityMenu.AppendRadioItem(wx_IDANY, 'Odd')
-    self.parityMenu.AppendRadioItem(wx_IDANY, 'Even')
-    self.parityMenu.AppendRadioItem(wx_IDANY, 'None')
+    self.parityRadios = []
+    self.parityMenu = wx.Menu()
+    for k,v in parityMap.items():
+      self.parityRadios.append(self.parityMenu.AppendRadioItem(wx.ID_ANY, k))
+    self.connectMenu.AppendMenu(wx.ID_ANY, 'Parity',        self.parityMenu)
     ## Byte Size SubMenu
-    self.byteMenu.AppendRadioItem(wx_IDANY, '7')
-    self.byteMenu.AppendRadioItem(wx_IDANY, '8')
-    self.byteMenu.AppendRadioItem(wx_IDANY, '9')
-    # Connect Menu Setup
-    self.connectMenu.Append(portMenu,   "Port")
-    self.connectMenu.Append(baudMenu,   "Baud Rate")
-    self.connectMenu.Append(flowMenu,   "Flow Control")
-    self.connectMenu.Append(parityMenu, "Parity")
-    self.connectMenu.Append(byteMenu,   "Byte Size")
-
+    self.byteRadios = []
+    self.byteMenu = wx.Menu()
+    for k,v in bytesizeMap.items():
+      self.byteRadios.append(self.byteMenu.AppendRadioItem(wx.ID_ANY, k))
+    self.connectMenu.AppendMenu(wx.ID_ANY, 'Byte Size',     self.byteMenu)
+    ## Stop Bits SubMenu
+    self.stopbitsRadios = []
+    self.stopbitsMenu = wx.Menu()
+    for k,v in stopMap.items():
+      self.stopbitsRadios.append(self.stopbitsMenu.AppendRadioItem(wx.ID_ANY, k))
+    self.connectMenu.AppendMenu(wx.ID_ANY, 'Stop Bits',     self.stopbitsMenu)
+    ## Flow Control SubMenu
+    self.flowMenu = wx.Menu()
+    self.xonoffCheck = self.flowMenu.AppendCheckItem(wx.ID_ANY, 'Xon/Xoff')
+    self.rtsctsCheck = self.flowMenu.AppendCheckItem(wx.ID_ANY, 'RTS/CTS')
+    self.dsrdtrCheck = self.flowMenu.AppendCheckItem(wx.ID_ANY, 'DSR/DTR')
+    self.connectMenu.AppendMenu(wx.ID_ANY, 'Flow Control',  self.flowMenu)
+    ## Open Connection Item
+    self.connectMenu.AppendSeparator()
+    openConnection  = self.connectMenu.Append(wx.ID_ANY, '&Open Connection', 'Open Connection')
+    self.Bind(wx.EVT_MENU, self.OnSetConnection, openConnection)
+    closeConnection = self.connectMenu.Append(wx.ID_ANY, '&Close Connection', 'Close Connection')
+    self.Bind(wx.EVT_MENU, self.OnCloseConnection, closeConnection)
     # Menu Bar
     menuBar = wx.MenuBar()
     menuBar.Append(fileMenu,    "&File")
-    menuBar.Append(connectMenu, "&Connect")
+    menuBar.Append(self.connectMenu, "&Connect")
     self.SetMenuBar(menuBar)
 
-    # Bind Events
-    self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
-    self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
-    
+
+    # Main Window
+    mainSizer = wx.BoxSizer(wx.VERTICAL)
+    # Serial Output Area
+    serialFont = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+    self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+    self.serialOutput.SetFont(serialFont)
+    self.serialOutput.AppendText('Hello there!')
+    mainSizer.Add(self.serialOutput, 1, wx.EXPAND)
+    # Input Area
+    lowerAreaSizer = wx.BoxSizer(wx.HORIZONTAL)
+    inputAreasSizer = wx.BoxSizer(wx.VERTICAL)
+    self.inputAreas = []
+    for i in range(0, 5):
+      self.inputAreas.append(
+        wx.TextCtrl(self, wx.ID_ANY, '', style=wx.TE_LEFT|wx.TE_PROCESS_ENTER, size=(200,25)))
+      self.Bind(wx.EVT_TEXT_ENTER, self.OnSendInput, self.inputAreas[-1])
+      inputAreasSizer.Add(self.inputAreas[-1], 4)
+    lowerAreaSizer.Add(inputAreasSizer)
+    self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
+                                       style=wx.RA_VERTICAL, label="Input Type",
+                                       choices = ('String', 'Decimal', 'Hex', 'Binary'),
+                                       size=(100,25*len(self.inputAreas)))
+    lowerAreaSizer.Add(self.inputTypeRadios)
+    mainSizer.Add(lowerAreaSizer, 1)
+
+    # Setup and get ready to roll
+    self.SetStatusText('Not Connected...')
+    self.SetSizer(mainSizer)
     self.Show(True)
 
-  def OnAbout(self, even):
-    dlg = wx.MessageDialog(self, "A set of useful serial utilities.", "About RandTerm", wx.OK)
+
+  def OnSetPort(self, event):
+    self.portName = wx.GetTextFromUser('Port: ', 'Select Port Name', self.portName)
+    if self.portName != "":
+      self.OnSetConnection(None)
+
+  def OnSetConnection(self, event):
+    if self.portName == "":
+      self.OnSetPort(None)
+      return
+
+    baudRadio   = None
+    for b in self.baudRadios:   
+      if b.IsChecked(): baudRadio   = b
+
+    parityRadio = None
+    for p in self.parityRadios:
+      if p.IsChecked(): parityRadio = p
+
+    byteRadio   = None
+    for b in self.byteRadios:
+      if b.IsChecked(): byteRadio   = b
+
+    stopRadio   = None
+    for s in self.stopbitsRadios:
+      if s.IsChecked(): stopRadio   = s
+
+    self.serialCon = serial.Serial()
+    self.serialCon.port     = self.portName
+    self.serialCon.baudrate = int(baudRadio.GetLabel())
+    self.serialCon.bytesize = bytesizeMap[byteRadio.GetLabel()]
+    self.serialCon.parity   = parityMap[parityRadio.GetLabel()]
+    self.serialCon.stopbits = stopMap[stopRadio.GetLabel()]
+    self.serialCon.xonxoff  = self.xonoffCheck.IsChecked()
+    self.serialCon.rtscts   = self.rtsctsCheck.IsChecked()
+    self.serialCon.dsrdtr   = self.dsrdtrCheck.IsChecked()
+
+    try:
+      self.serialCon.open()
+    except serial.SerialException as ex:
+      wx.MessageDialog(None, str(ex), 'Serial Error', wx.OK | wx.ICON_ERROR).ShowModal()
+      self.SetStatusText('Not Connected...')
+      return
+
+    self.SetStatusText('Connected to ' + self.portName + ' ' + baudRadio.GetLabel() + 'bps')
+
+  def OnCloseConnection(self, event):
+    self.serialCon.close()
+
+  def OnSendInput(self, event):
+    inputArea = event.GetEventObject()
+    inputArea.SetSelection(0,-1)
+    inputString = inputArea.GetString(0,-1)
+
+    inputVal = ''
+    typeString = self.inputTypeRadios.GetStringSelection()
+
+    if(typeString == 'String'):
+      inputVal = str(inputString)
+    else:
+      base = 0
+      if(typeString == 'Decimal'):
+        base = 10
+      elif(typeString == 'Hex'):
+        base = 16
+      elif(typeString == 'Binary'):
+        base = 2
+      numStrings = inputString.split(" ")
+      for numString in numStrings:
+        intVal = int(numString, base)
+        inputVal += chr(intVal)
+      
+    if self.serialCon.isOpen():
+      self.serialCon.write(inputVal)
+
+    print 'SENDING INPUT: ' + inputVal
+
+  def OnAbout(self, event):
+    dlg = wx.MessageDialog(self, "A set of useful serial utilities by "
+                                 "Randolph Voorhies (rand.voorhies@gmail.com)",
+                                 "About RandTerm", wx.OK)
     dlg.ShowModal()
     dlg.Destroy()
 
@@ -90,5 +228,5 @@ class RandTermFrame(wx.Frame):
 
 
 app = wx.App(False)
-frame = wx.MainFrame(None, "RandTerm")
+frame = RandTermFrame(None, "RandTerm")
 app.MainLoop()
