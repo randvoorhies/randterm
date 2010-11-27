@@ -17,6 +17,8 @@
 
 import wx
 import serial
+from threading import Thread
+import time
 
 parityMap = {
   'None':  serial.PARITY_NONE,
@@ -40,10 +42,12 @@ bytesizeMap = {
 }
 
 
-class RandTermFrame(wx.Frame):
+class RandTermFrame(wx.Frame, Thread):
   def __init__(self, parent, title):
-
+    Thread.__init__(self)
     wx.Frame.__init__(self, parent, title=title, size=(600, 400))
+
+    self.cfg = wx.Config('randterm')
 
     self.CreateStatusBar()
     # File Menu
@@ -99,9 +103,11 @@ class RandTermFrame(wx.Frame):
     self.connectMenu.AppendMenu(wx.ID_ANY, 'Flow Control',  self.flowMenu)
     ## Open Connection Item
     self.connectMenu.AppendSeparator()
-    openConnection  = self.connectMenu.Append(wx.ID_ANY, '&Open Connection', 'Open Connection')
+    openConnection  = self.connectMenu.Append(
+      wx.ID_ANY, '&Open Connection', 'Open Connection')
     self.Bind(wx.EVT_MENU, self.OnSetConnection, openConnection)
-    closeConnection = self.connectMenu.Append(wx.ID_ANY, '&Close Connection', 'Close Connection')
+    closeConnection = self.connectMenu.Append(
+      wx.ID_ANY, '&Close Connection', 'Close Connection')
     self.Bind(wx.EVT_MENU, self.OnCloseConnection, closeConnection)
     # Menu Bar
     menuBar = wx.MenuBar()
@@ -109,14 +115,16 @@ class RandTermFrame(wx.Frame):
     menuBar.Append(self.connectMenu, "&Connect")
     self.SetMenuBar(menuBar)
 
+    # Setup the defaults
+    self.readDefaults()
+
 
     # Main Window
     mainSizer = wx.BoxSizer(wx.VERTICAL)
     # Serial Output Area
     serialFont = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-    self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP)
+    self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)# | wx.TE_DONTWRAP)
     self.serialOutput.SetFont(serialFont)
-    self.serialOutput.AppendText('Hello there!')
     mainSizer.Add(self.serialOutput, 1, wx.EXPAND)
     # Input Area
     lowerAreaSizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -142,10 +150,35 @@ class RandTermFrame(wx.Frame):
     self.Show(True)
 
 
+  def readDefaults(self):
+    # Read in the checkable items
+    menumap = {
+      'baud'     : self.baudMenu,
+      'parity'   : self.parityMenu,
+      'bytesize' : self.byteMenu,
+      'stopbits' : self.stopbitsMenu
+    }
+    for k, v in menumap.items():
+      if self.cfg.Exists(k):
+        default = self.cfg.Read(k)
+        for item in v.GetMenuItems():
+          if item.GetLabel() == default:
+            item.Check(True)
+
+    for item in self.flowMenu.GetMenuItems():
+        item.Check(self.cfg.ReadBool(item.GetLabel(), defaultVal=False))
+
+    if self.cfg.Exists('portname'):
+      self.portName = self.cfg.Read('portname')
+
+  def run(self):
+    """The runtime thread to pull data from the open serial port"""
+    while self.running:
+      byte = self.serialCon.read()
+      wx.CallAfter(self.serialOutput.AppendText,byte)
+
   def OnSetPort(self, event):
     self.portName = wx.GetTextFromUser('Port: ', 'Select Port Name', self.portName)
-    if self.portName != "":
-      self.OnSetConnection(None)
 
   def OnSetConnection(self, event):
     if self.portName == "":
@@ -174,6 +207,19 @@ class RandTermFrame(wx.Frame):
     self.serialCon.xonxoff  = self.xonoffCheck.IsChecked()
     self.serialCon.rtscts   = self.rtsctsCheck.IsChecked()
     self.serialCon.dsrdtr   = self.dsrdtrCheck.IsChecked()
+    self.serialCon.timeout  = .3
+
+    self.cfg.Write('portname', self.portName)
+    self.cfg.Write('baud',     baudRadio.GetLabel())
+    self.cfg.Write('parity',   parityRadio.GetLabel())
+    self.cfg.Write('bytesize', byteRadio.GetLabel())
+    self.cfg.Write('stopbits', stopRadio.GetLabel())
+    for item in self.flowMenu.GetMenuItems():
+      self.cfg.WriteBool(item.GetLabel(),item.IsChecked())
+
+
+
+
 
     try:
       self.serialCon.open()
@@ -183,9 +229,14 @@ class RandTermFrame(wx.Frame):
       return
 
     self.SetStatusText('Connected to ' + self.portName + ' ' + baudRadio.GetLabel() + 'bps')
+    self.running = True
+    self.start()
 
   def OnCloseConnection(self, event):
+    self.running = False
+    self.join()
     self.serialCon.close()
+    self.SetStatusText('Not Connected...')
 
   def OnSendInput(self, event):
     inputArea = event.GetEventObject()
@@ -199,9 +250,9 @@ class RandTermFrame(wx.Frame):
       inputVal = str(inputString)
     else:
       base = 0
-      if(typeString == 'Binary'):
+      if(typeString   == 'Binary'):
         base = 2
-      elif(typeString   == 'Decimal'):
+      elif(typeString == 'Decimal'):
         base = 10
       elif(typeString == 'Hex'):
         base = 16
@@ -212,8 +263,6 @@ class RandTermFrame(wx.Frame):
       
     if self.serialCon.isOpen():
       self.serialCon.write(inputVal)
-
-    print 'SENDING INPUT: ' + inputVal
 
   def OnAbout(self, event):
     dlg = wx.MessageDialog(self, "A set of useful serial utilities by "
