@@ -49,6 +49,8 @@ class RandTermFrame(wx.Frame, Thread):
 
     self.cfg = wx.Config('randterm')
 
+    self.rxBuffer = ''
+
     self.CreateStatusBar()
     # File Menu
     fileMenu = wx.Menu()
@@ -118,14 +120,20 @@ class RandTermFrame(wx.Frame, Thread):
     # Setup the defaults
     self.readDefaults()
 
-
     # Main Window
     mainSizer = wx.BoxSizer(wx.VERTICAL)
     # Serial Output Area
+    outputSizer = wx.BoxSizer(wx.VERTICAL)
+    self.displayTypeRadios = wx.RadioBox(self, wx.ID_ANY,
+                                       style=wx.RA_HORIZONTAL, label="Display Type",
+                                       choices = ('Ascii', 'Decimal', 'Hex', 'Binary'))
+    self.Bind(wx.EVT_RADIOBOX, self.OnChangeDisplay, self.displayTypeRadios)
+    outputSizer.Add(self.displayTypeRadios, 0, wx.EXPAND)
     serialFont = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
-    self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)# | wx.TE_DONTWRAP)
+    self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)
     self.serialOutput.SetFont(serialFont)
-    mainSizer.Add(self.serialOutput, 1, wx.EXPAND)
+    outputSizer.Add(self.serialOutput, 1, wx.EXPAND)
+    mainSizer.Add(outputSizer, 1, wx.EXPAND)
     # Input Area
     lowerAreaSizer = wx.BoxSizer(wx.HORIZONTAL)
     inputAreasSizer = wx.BoxSizer(wx.VERTICAL)
@@ -141,7 +149,7 @@ class RandTermFrame(wx.Frame, Thread):
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
                                        size=(100,25*len(self.inputAreas)))
     lowerAreaSizer.Add(self.inputTypeRadios)
-    mainSizer.Add(lowerAreaSizer, 1)
+    mainSizer.Add(lowerAreaSizer, 0)
 
     # Setup and get ready to roll
     self.serialCon = serial.Serial()
@@ -149,9 +157,14 @@ class RandTermFrame(wx.Frame, Thread):
     self.SetSizer(mainSizer)
     self.Show(True)
 
+  def OnChangeDisplay(self, event):
+    """Gets called when the user changes the display format"""
+    print 'changing display'
+    self.serialOutput.Clear()
+    typeString = self.displayTypeRadios.GetStringSelection()
+    self.appendToDisplay(self.rxBuffer)
 
   def readDefaults(self):
-    # Read in the checkable items
     menumap = {
       'baud'     : self.baudMenu,
       'parity'   : self.parityMenu,
@@ -175,7 +188,30 @@ class RandTermFrame(wx.Frame, Thread):
     """The runtime thread to pull data from the open serial port"""
     while self.running:
       byte = self.serialCon.read()
-      wx.CallAfter(self.serialOutput.AppendText,byte)
+      self.rxBuffer += byte
+      wx.CallAfter(self.appendToDisplay,byte)
+
+  def appendToDisplay(self, newBytes):
+    if newBytes == '':
+      return
+
+    typeString = self.displayTypeRadios.GetStringSelection()
+
+    if(typeString == 'Ascii'):
+      self.serialOutput.AppendText(newBytes)
+    else:
+      trans = None
+      if(typeString   == 'Binary'):
+        trans = lambda n: n>0 and trans(n>>1).lstrip('0')+str(n&1) or '0'
+      elif(typeString == 'Decimal'):
+        trans = str
+      elif(typeString == 'Hex'):
+        trans = hex
+      newStr=''
+      for b in newBytes:
+        newStr += trans(ord(b)) + ' '
+      self.serialOutput.AppendText(newStr)
+
 
   def OnSetPort(self, event):
     self.portName = wx.GetTextFromUser('Port: ', 'Select Port Name', self.portName)
