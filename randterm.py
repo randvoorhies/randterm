@@ -42,7 +42,7 @@ bytesizeMap = {
 }
 
 
-class RandTermFrame(wx.Frame, Thread):
+class randtermFrame(wx.Frame, Thread):
   def __init__(self, parent, title):
     Thread.__init__(self)
     wx.Frame.__init__(self, parent, title=title, size=(600, 400))
@@ -55,7 +55,7 @@ class RandTermFrame(wx.Frame, Thread):
     # File Menu
     fileMenu = wx.Menu()
     menuAbout = fileMenu.Append(
-      wx.ID_ABOUT, "&About", " Information about RandTerm")
+      wx.ID_ABOUT, "&About", " Information about randterm")
     self.Bind(wx.EVT_MENU, self.OnAbout, menuAbout)
     menuExit = fileMenu.Append(wx.ID_EXIT, "E&xit", " Exit")
     self.Bind(wx.EVT_MENU, self.OnExit, menuExit)
@@ -125,7 +125,7 @@ class RandTermFrame(wx.Frame, Thread):
     # Serial Output Area
     outputSizer = wx.BoxSizer(wx.VERTICAL)
     self.displayTypeRadios = wx.RadioBox(self, wx.ID_ANY,
-                                       style=wx.RA_HORIZONTAL, label="Display Type",
+                                       style=wx.RA_HORIZONTAL, label="RX Format",
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'))
     self.Bind(wx.EVT_RADIOBOX, self.OnChangeDisplay, self.displayTypeRadios)
     outputSizer.Add(self.displayTypeRadios, 0, wx.EXPAND)
@@ -145,7 +145,7 @@ class RandTermFrame(wx.Frame, Thread):
       inputAreasSizer.Add(self.inputAreas[-1], 4)
     lowerAreaSizer.Add(inputAreasSizer)
     self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
-                                       style=wx.RA_VERTICAL, label="Input Type",
+                                       style=wx.RA_VERTICAL, label="TX Format",
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
                                        size=(100,25*len(self.inputAreas)))
     lowerAreaSizer.Add(self.inputTypeRadios)
@@ -159,7 +159,6 @@ class RandTermFrame(wx.Frame, Thread):
 
   def OnChangeDisplay(self, event):
     """Gets called when the user changes the display format"""
-    print 'changing display'
     self.serialOutput.Clear()
     typeString = self.displayTypeRadios.GetStringSelection()
     self.appendToDisplay(self.rxBuffer)
@@ -303,7 +302,7 @@ class RandTermFrame(wx.Frame, Thread):
   def OnAbout(self, event):
     dlg = wx.MessageDialog(self, "A set of useful serial utilities by "
                                  "Randolph Voorhies (rand.voorhies@gmail.com)",
-                                 "About RandTerm", wx.OK)
+                                 "About randterm", wx.OK)
     dlg.ShowModal()
     dlg.Destroy()
 
@@ -312,5 +311,5 @@ class RandTermFrame(wx.Frame, Thread):
 
 
 app = wx.App(False)
-frame = RandTermFrame(None, "RandTerm")
+frame = randtermFrame(None, "randterm")
 app.MainLoop()
