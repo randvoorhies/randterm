@@ -33,13 +33,10 @@ parityMap = {
   'None':  serial.PARITY_NONE,
   'Even':  serial.PARITY_EVEN,
   'Odd':   serial.PARITY_ODD,
-  'Mark':  serial.PARITY_MARK,
-  'Space': serial.PARITY_SPACE
 }
 
 stopMap = {
   '1':   serial.STOPBITS_ONE,
-  '1.5': serial.STOPBITS_ONE_POINT_FIVE,
   '2':   serial.STOPBITS_TWO
 }
 
@@ -338,7 +335,8 @@ class randtermFrame(wx.Frame, Thread):
   ##################################################
   def OnSendLiveType(self, event):
     inputArea = event.GetEventObject()
-    inputString = inputArea.GetString(0,-1)
+    inputString = str(inputArea.GetString(0,-1))
+    print 'livetype! "'+inputString+'"'
     if inputString == "":
       return
     inputArea.Clear()
