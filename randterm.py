@@ -17,8 +17,17 @@
 
 import wx
 import serial
+import threading
 from threading import Thread
 import time
+
+
+rxStyle = wx.TextAttr(
+  colText = wx.Colour(100, 0, 0)
+)
+txStyle = wx.TextAttr(
+  colText = wx.Colour(0, 0, 100)
+)
 
 parityMap = {
   'None':  serial.PARITY_NONE,
@@ -49,7 +58,8 @@ class randtermFrame(wx.Frame, Thread):
 
     self.cfg = wx.Config('randterm')
 
-    self.rxBuffer = ''
+    self.historyLock = threading.Lock()
+    self.history = []
 
     self.CreateStatusBar()
     # File Menu
@@ -137,12 +147,18 @@ class randtermFrame(wx.Frame, Thread):
     # Input Area
     lowerAreaSizer = wx.BoxSizer(wx.HORIZONTAL)
     inputAreasSizer = wx.BoxSizer(wx.VERTICAL)
+
     self.inputAreas = []
-    for i in range(0, 5):
+    for i in range(1, 6):
+      inputSizer = wx.BoxSizer(wx.HORIZONTAL)
       self.inputAreas.append(
         wx.TextCtrl(self, wx.ID_ANY, '', style=wx.TE_LEFT|wx.TE_PROCESS_ENTER, size=(200,25)))
       self.Bind(wx.EVT_TEXT_ENTER, self.OnSendInput, self.inputAreas[-1])
-      inputAreasSizer.Add(self.inputAreas[-1], 4)
+      inputSizer.Add(wx.StaticText(self, wx.ID_ANY, " " + str(i)+" : "))
+      inputSizer.Add(self.inputAreas[-1], 4)
+      inputAreasSizer.Add(inputSizer)
+
+
     lowerAreaSizer.Add(inputAreasSizer)
     self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
                                        style=wx.RA_VERTICAL, label="TX Format",
@@ -160,8 +176,7 @@ class randtermFrame(wx.Frame, Thread):
   def OnChangeDisplay(self, event):
     """Gets called when the user changes the display format"""
     self.serialOutput.Clear()
-    typeString = self.displayTypeRadios.GetStringSelection()
-    self.appendToDisplay(self.rxBuffer)
+    self.appendToDisplay(self.history)
 
   def readDefaults(self):
     menumap = {
@@ -187,17 +202,21 @@ class randtermFrame(wx.Frame, Thread):
     """The runtime thread to pull data from the open serial port"""
     while self.running:
       byte = self.serialCon.read()
-      self.rxBuffer += byte
-      wx.CallAfter(self.appendToDisplay,byte)
+      if byte != '':
+        historyEntry = {'type':'RX', 'data':byte}
+        self.history.append(historyEntry)
+        wx.CallAfter(self.appendToDisplay,[historyEntry])
 
-  def appendToDisplay(self, newBytes):
-    if newBytes == '':
+  def appendToDisplay(self, newEntries):
+    if newEntries == None:
       return
 
     typeString = self.displayTypeRadios.GetStringSelection()
 
-    if(typeString == 'Ascii'):
-      self.serialOutput.AppendText(newBytes)
+    entryCopies = []
+
+    if typeString == 'Ascii':
+      entryCopies = newEntries
     else:
       trans = None
       if(typeString   == 'Binary'):
@@ -206,10 +225,17 @@ class randtermFrame(wx.Frame, Thread):
         trans = str
       elif(typeString == 'Hex'):
         trans = hex
-      newStr=''
-      for b in newBytes:
-        newStr += trans(ord(b)) + ' '
-      self.serialOutput.AppendText(newStr)
+      for entry in newEntries:
+        entryCopies.append({'type':entry['type'], 'data':trans(ord(entry['data']))})
+
+    for entry in entryCopies:
+      if(entry['type'] == 'RX'):
+        self.serialOutput.SetDefaultStyle(rxStyle)
+      else:
+        self.serialOutput.SetDefaultStyle(txStyle)
+      self.serialOutput.AppendText(entry['data'])
+      if typeString != 'Ascii':
+        self.serialOutput.AppendText(' ')
 
 
   def OnSetPort(self, event):
@@ -297,6 +323,11 @@ class randtermFrame(wx.Frame, Thread):
         inputVal += chr(intVal)
       
     if self.serialCon.isOpen():
+      newHistoryVals = []
+      for c in inputVal:
+        newHistoryVals.append({'type':'TX', 'data':c})
+      self.history = self.history + newHistoryVals
+      self.appendToDisplay(newHistoryVals)
       self.serialCon.write(inputVal)
 
   def OnAbout(self, event):
