@@ -52,6 +52,7 @@ bytesizeMap = {
 
 
 class randtermFrame(wx.Frame, Thread):
+  ##################################################
   def __init__(self, parent, title):
     Thread.__init__(self)
     wx.Frame.__init__(self, parent, title=title, size=(600, 400))
@@ -173,11 +174,13 @@ class randtermFrame(wx.Frame, Thread):
     self.SetSizer(mainSizer)
     self.Show(True)
 
+  ##################################################
   def OnChangeDisplay(self, event):
     """Gets called when the user changes the display format"""
     self.serialOutput.Clear()
     self.appendToDisplay(self.history)
 
+  ##################################################
   def readDefaults(self):
     menumap = {
       'baud'     : self.baudMenu,
@@ -198,6 +201,7 @@ class randtermFrame(wx.Frame, Thread):
     if self.cfg.Exists('portname'):
       self.portName = self.cfg.Read('portname')
 
+  ##################################################
   def run(self):
     """The runtime thread to pull data from the open serial port"""
     while self.running:
@@ -207,6 +211,17 @@ class randtermFrame(wx.Frame, Thread):
         self.history.append(historyEntry)
         wx.CallAfter(self.appendToDisplay,[historyEntry])
 
+  ##################################################
+  def intToBinString(self,n):
+    string = ''
+    for i in range(0, 8):
+      if (n&1): string = '1' + string
+      else:     string = '0' + string
+      n = n >> 1
+    return string
+
+
+  ##################################################
   def appendToDisplay(self, newEntries):
     if newEntries == None:
       return
@@ -220,7 +235,7 @@ class randtermFrame(wx.Frame, Thread):
     else:
       trans = None
       if(typeString   == 'Binary'):
-        trans = lambda n: n>0 and trans(n>>1).lstrip('0')+str(n&1) or '0'
+        trans = self.intToBinString
       elif(typeString == 'Decimal'):
         trans = str
       elif(typeString == 'Hex'):
@@ -238,9 +253,11 @@ class randtermFrame(wx.Frame, Thread):
         self.serialOutput.AppendText(' ')
 
 
+  ##################################################
   def OnSetPort(self, event):
     self.portName = wx.GetTextFromUser('Port: ', 'Select Port Name', self.portName)
 
+  ##################################################
   def OnSetConnection(self, event):
     if self.portName == "":
       self.OnSetPort(None)
@@ -278,10 +295,6 @@ class randtermFrame(wx.Frame, Thread):
     for item in self.flowMenu.GetMenuItems():
       self.cfg.WriteBool(item.GetLabel(),item.IsChecked())
 
-
-
-
-
     try:
       self.serialCon.open()
     except serial.SerialException as ex:
@@ -293,12 +306,14 @@ class randtermFrame(wx.Frame, Thread):
     self.running = True
     self.start()
 
+  ##################################################
   def OnCloseConnection(self, event):
     self.running = False
     self.join()
     self.serialCon.close()
     self.SetStatusText('Not Connected...')
 
+  ##################################################
   def OnSendInput(self, event):
     inputArea = event.GetEventObject()
     inputArea.SetSelection(0,-1)
@@ -319,6 +334,8 @@ class randtermFrame(wx.Frame, Thread):
         base = 16
       numStrings = inputString.split(" ")
       for numString in numStrings:
+        numString = numString.strip()
+        if numString == '': continue
         intVal = int(numString, base)
         inputVal += chr(intVal)
       
@@ -330,6 +347,7 @@ class randtermFrame(wx.Frame, Thread):
       self.appendToDisplay(newHistoryVals)
       self.serialCon.write(inputVal)
 
+  ##################################################
   def OnAbout(self, event):
     dlg = wx.MessageDialog(self, "A set of useful serial utilities by "
                                  "Randolph Voorhies (rand.voorhies@gmail.com)",
@@ -337,6 +355,7 @@ class randtermFrame(wx.Frame, Thread):
     dlg.ShowModal()
     dlg.Destroy()
 
+  ##################################################
   def OnExit(self, e):
     self.Close(True)
 
