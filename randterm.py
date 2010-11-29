@@ -146,26 +146,37 @@ class randtermFrame(wx.Frame, Thread):
     outputSizer.Add(self.serialOutput, 1, wx.EXPAND)
     mainSizer.Add(outputSizer, 1, wx.EXPAND)
     # Input Area
-    lowerAreaSizer = wx.BoxSizer(wx.HORIZONTAL)
+    lowerAreaSizer = wx.BoxSizer(wx.VERTICAL)
+    ## LiveType
+    liveTypeSizer = wx.BoxSizer(wx.HORIZONTAL)
+    lowerAreaSizer.Add(liveTypeSizer)
+    liveTypeSizer.Add(wx.StaticText(self, wx.ID_ANY, " LiveType: "))
+    self.liveType = wx.TextCtrl(self, wx.ID_ANY, '',
+                                style=wx.TE_LEFT|wx.TE_MULTILINE, size=(160,25))
+    liveTypeSizer.Add(self.liveType)
+    self.Bind(wx.EVT_TEXT, self.OnSendLiveType, self.liveType)
+    ## Input Array
+    lowerAreaSizer2 = wx.BoxSizer(wx.HORIZONTAL)
+    lowerAreaSizer.Add(lowerAreaSizer2)
     inputAreasSizer = wx.BoxSizer(wx.VERTICAL)
-
+    lowerAreaSizer2.Add(inputAreasSizer)
     self.inputAreas = []
     for i in range(1, 6):
       inputSizer = wx.BoxSizer(wx.HORIZONTAL)
       self.inputAreas.append(
-        wx.TextCtrl(self, wx.ID_ANY, '', style=wx.TE_LEFT|wx.TE_PROCESS_ENTER, size=(200,25)))
+        wx.TextCtrl(self, wx.ID_ANY, '',
+                    style=wx.TE_LEFT|wx.TE_PROCESS_ENTER,
+                    size=(200,25)))
       self.Bind(wx.EVT_TEXT_ENTER, self.OnSendInput, self.inputAreas[-1])
       inputSizer.Add(wx.StaticText(self, wx.ID_ANY, " " + str(i)+" : "))
       inputSizer.Add(self.inputAreas[-1], 4)
       inputAreasSizer.Add(inputSizer)
-
-
-    lowerAreaSizer.Add(inputAreasSizer)
+    ## Input Type Radios
     self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
                                        style=wx.RA_VERTICAL, label="TX Format",
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
                                        size=(100,25*len(self.inputAreas)))
-    lowerAreaSizer.Add(self.inputTypeRadios)
+    lowerAreaSizer2.Add(self.inputTypeRadios)
     mainSizer.Add(lowerAreaSizer, 0)
 
     # Setup and get ready to roll
@@ -178,7 +189,9 @@ class randtermFrame(wx.Frame, Thread):
   def OnChangeDisplay(self, event):
     """Gets called when the user changes the display format"""
     self.serialOutput.Clear()
+    self.historyLock.acquire()
     self.appendToDisplay(self.history)
+    self.historyLock.release()
 
   ##################################################
   def readDefaults(self):
@@ -208,7 +221,9 @@ class randtermFrame(wx.Frame, Thread):
       byte = self.serialCon.read()
       if byte != '':
         historyEntry = {'type':'RX', 'data':byte}
+        self.historyLock.acquire()
         self.history.append(historyEntry)
+        self.historyLock.release()
         wx.CallAfter(self.appendToDisplay,[historyEntry])
 
   ##################################################
@@ -219,7 +234,6 @@ class randtermFrame(wx.Frame, Thread):
       else:     string = '0' + string
       n = n >> 1
     return string
-
 
   ##################################################
   def appendToDisplay(self, newEntries):
@@ -244,11 +258,19 @@ class randtermFrame(wx.Frame, Thread):
         entryCopies.append({'type':entry['type'], 'data':trans(ord(entry['data']))})
 
     for entry in entryCopies:
+      # Set the proper output color
       if(entry['type'] == 'RX'):
         self.serialOutput.SetDefaultStyle(rxStyle)
       else:
         self.serialOutput.SetDefaultStyle(txStyle)
-      self.serialOutput.AppendText(entry['data'])
+
+      # If the byte to show isn't valid ascii, then just print out ascii 1
+      # as a placeholder
+      try:
+        self.serialOutput.AppendText(entry['data'])
+      except:
+        self.serialOutput.AppendText(chr(1))
+
       if typeString != 'Ascii':
         self.serialOutput.AppendText(' ')
 
@@ -314,6 +336,24 @@ class randtermFrame(wx.Frame, Thread):
     self.SetStatusText('Not Connected...')
 
   ##################################################
+  def OnSendLiveType(self, event):
+    inputArea = event.GetEventObject()
+    inputString = inputArea.GetString(0,-1)
+    if inputString == "":
+      return
+    inputArea.Clear()
+    if self.serialCon.isOpen():
+      newHistoryVals = []
+      for c in inputString:
+        newHistoryVals.append({'type':'TX', 'data':c})
+
+      self.historyLock.acquire()
+      self.history = self.history + newHistoryVals
+      self.historyLock.release()
+      self.appendToDisplay(newHistoryVals)
+      self.serialCon.write(inputString)
+
+  ##################################################
   def OnSendInput(self, event):
     inputArea = event.GetEventObject()
     inputArea.SetSelection(0,-1)
@@ -343,14 +383,17 @@ class randtermFrame(wx.Frame, Thread):
       newHistoryVals = []
       for c in inputVal:
         newHistoryVals.append({'type':'TX', 'data':c})
+      self.historyLock.acquire()
       self.history = self.history + newHistoryVals
-      self.appendToDisplay(newHistoryVals)
+      self.historyLock.release()
       self.serialCon.write(inputVal)
+      self.appendToDisplay(newHistoryVals)
 
   ##################################################
   def OnAbout(self, event):
     dlg = wx.MessageDialog(self, "A set of useful serial utilities by "
-                                 "Randolph Voorhies (rand.voorhies@gmail.com)",
+                                 "Randolph Voorhies (rand.voorhies@gmail.com)\n"
+                                 "http://ilab.usc.edu/~rand",
                                  "About randterm", wx.OK)
     dlg.ShowModal()
     dlg.Destroy()
