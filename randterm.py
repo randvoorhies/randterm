@@ -181,6 +181,8 @@ class randtermFrame(wx.Frame, Thread):
     self.SetStatusText('Not Connected...')
     self.SetSizer(mainSizer)
     self.Show(True)
+    self.running = False
+    self.start()
 
   ##################################################
   def OnChangeDisplay(self, event):
@@ -214,14 +216,27 @@ class randtermFrame(wx.Frame, Thread):
   ##################################################
   def run(self):
     """The runtime thread to pull data from the open serial port"""
-    while self.running:
-      byte = self.serialCon.read()
-      if byte != '':
-        historyEntry = {'type':'RX', 'data':byte}
-        self.historyLock.acquire()
-        self.history.append(historyEntry)
-        self.historyLock.release()
-        wx.CallAfter(self.appendToDisplay,[historyEntry])
+    while True:
+      if self.running:
+
+        print 'running...'
+
+        try:
+          byte = self.serialCon.read()
+        except:
+          self.running = False
+          self.SetStatusText('Not Connected...')
+          continue
+
+        if byte != '':
+          historyEntry = {'type':'RX', 'data':byte}
+          self.historyLock.acquire()
+          self.history.append(historyEntry)
+          self.historyLock.release()
+          wx.CallAfter(self.appendToDisplay,[historyEntry])
+      else:
+        time.sleep(.2)
+
 
   ##################################################
   def intToBinString(self,n):
@@ -323,13 +338,13 @@ class randtermFrame(wx.Frame, Thread):
 
     self.SetStatusText('Connected to ' + self.portName + ' ' + baudRadio.GetLabel() + 'bps')
     self.running = True
-    self.start()
 
   ##################################################
   def OnCloseConnection(self, event):
     self.running = False
-    self.join()
+
     self.serialCon.close()
+
     self.SetStatusText('Not Connected...')
 
   ##################################################
