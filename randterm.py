@@ -59,6 +59,7 @@ class randtermFrame(wx.Frame, Thread):
     self.historyLock = threading.Lock()
     self.history = []
 
+
     self.CreateStatusBar()
     # File Menu
     fileMenu = wx.Menu()
@@ -132,11 +133,19 @@ class randtermFrame(wx.Frame, Thread):
     mainSizer = wx.BoxSizer(wx.VERTICAL)
     # Serial Output Area
     outputSizer = wx.BoxSizer(wx.VERTICAL)
+    ## Output Type
+    topSizer = wx.BoxSizer(wx.HORIZONTAL)
     self.displayTypeRadios = wx.RadioBox(self, wx.ID_ANY,
                                        style=wx.RA_HORIZONTAL, label="RX Format",
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'))
     self.Bind(wx.EVT_RADIOBOX, self.OnChangeDisplay, self.displayTypeRadios)
-    outputSizer.Add(self.displayTypeRadios, 0, wx.EXPAND)
+    topSizer.Add(self.displayTypeRadios, 0)
+    self.clearOutputButton = wx.Button(self, id=wx.ID_ANY, label="Clear")
+    self.Bind(wx.EVT_BUTTON, self.OnClearOutput, self.clearOutputButton)
+    topSizer.AddStretchSpacer()
+    topSizer.Add(self.clearOutputButton, flag=wx.ALIGN_CENTER_VERTICAL | wx.RIGHT )
+    outputSizer.Add(topSizer, flag=wx.EXPAND)
+    ## Output Area
     serialFont = wx.Font(10, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
     self.serialOutput = wx.TextCtrl(self, style=wx.TE_MULTILINE | wx.TE_READONLY)
     self.serialOutput.SetFont(serialFont)
@@ -174,6 +183,13 @@ class randtermFrame(wx.Frame, Thread):
                                        choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
                                        size=(100,25*len(self.inputAreas)))
     lowerAreaSizer2.Add(self.inputTypeRadios)
+    # Connect Quick Buttons
+    connectButtonSizer = wx.BoxSizer(wx.VERTICAL)
+    self.connectButton = wx.Button(self, id=wx.ID_ANY, label="  Disconnect  ")
+    self.connectButton.SetBackgroundColour(wx.Colour(255, 0, 0))
+    self.Bind(wx.EVT_BUTTON, self.OnToggleConnectButton, self.connectButton)
+    connectButtonSizer.Add(self.connectButton)
+    lowerAreaSizer2.Add(connectButtonSizer)
     mainSizer.Add(lowerAreaSizer, 0)
 
     # Setup and get ready to roll
@@ -181,8 +197,10 @@ class randtermFrame(wx.Frame, Thread):
     self.SetStatusText('Not Connected...')
     self.SetSizer(mainSizer)
     self.Show(True)
-    self.running = False
+    self.connected = False
     self.start()
+    self.connectButton.SetLabel("Connect")
+
 
   ##################################################
   def OnChangeDisplay(self, event):
@@ -217,14 +235,12 @@ class randtermFrame(wx.Frame, Thread):
   def run(self):
     """The runtime thread to pull data from the open serial port"""
     while True:
-      if self.running:
-
-        print 'running...'
+      if self.connected:
 
         try:
           byte = self.serialCon.read()
         except:
-          self.running = False
+          self.connected = False
           self.SetStatusText('Not Connected...')
           continue
 
@@ -337,21 +353,31 @@ class randtermFrame(wx.Frame, Thread):
       return
 
     self.SetStatusText('Connected to ' + self.portName + ' ' + baudRadio.GetLabel() + 'bps')
-    self.running = True
+    self.connected = True
+    self.connectButton.SetBackgroundColour(wx.Colour(0, 255, 0))
+    self.connectButton.SetLabel("Disconnect")
+
+  ##################################################
+  def OnClearOutput(self, event):
+    self.historyLock.acquire()
+    self.serialOutput.Clear()
+    self.history = []
+    self.historyLock.release()
 
   ##################################################
   def OnCloseConnection(self, event):
-    self.running = False
+    self.connected = False
 
     self.serialCon.close()
 
     self.SetStatusText('Not Connected...')
+    self.connectButton.SetBackgroundColour(wx.Colour(255, 0, 0))
+    self.connectButton.SetLabel("Connect")
 
   ##################################################
   def OnSendLiveType(self, event):
     inputArea = event.GetEventObject()
     inputString = str(inputArea.GetString(0,-1))
-    print 'livetype! "'+inputString+'"'
     if inputString == "":
       return
     inputArea.Clear()
@@ -414,6 +440,13 @@ class randtermFrame(wx.Frame, Thread):
   ##################################################
   def OnExit(self, e):
     self.Close(True)
+
+  ##################################################
+  def OnToggleConnectButton(self, event):
+    if(self.connected):
+      self.OnCloseConnection(None)
+    else:
+      self.OnSetConnection(None)
 
 
 app = wx.App(False)
