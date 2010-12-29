@@ -59,6 +59,8 @@ class randtermFrame(wx.Frame, Thread):
     self.historyLock = threading.Lock()
     self.history = []
 
+    self.Bind(wx.EVT_ACTIVATE, self.OnActivate)
+
 
     self.CreateStatusBar()
     # File Menu
@@ -166,7 +168,9 @@ class randtermFrame(wx.Frame, Thread):
     lowerAreaSizer.Add(lowerAreaSizer2)
     inputAreasSizer = wx.BoxSizer(wx.VERTICAL)
     lowerAreaSizer2.Add(inputAreasSizer)
+    formatTypes = ['Ascii', 'Decimal', 'Hex', 'Binary']
     self.inputAreas = []
+    self.inputFormats = []
     for i in range(1, 6):
       inputSizer = wx.BoxSizer(wx.HORIZONTAL)
       self.inputAreas.append(
@@ -176,19 +180,28 @@ class randtermFrame(wx.Frame, Thread):
       self.Bind(wx.EVT_TEXT_ENTER, self.OnSendInput, self.inputAreas[-1])
       inputSizer.Add(wx.StaticText(self, wx.ID_ANY, " " + str(i)+" : "))
       inputSizer.Add(self.inputAreas[-1], 4)
+      self.inputFormats.append(
+        wx.Choice(self, id=wx.ID_ANY, choices=formatTypes))
+      inputSizer.Add(self.inputFormats[-1])
       inputAreasSizer.Add(inputSizer)
-    ## Input Type Radios
-    self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
-                                       style=wx.RA_VERTICAL, label="TX Format",
-                                       choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
-                                       size=(100,25*len(self.inputAreas)))
-    lowerAreaSizer2.Add(self.inputTypeRadios)
+    ### Input Type Radios
+    #self.inputTypeRadios = wx.RadioBox(self, wx.ID_ANY,
+    #                                   style=wx.RA_VERTICAL, label="TX Format",
+    #                                   choices = ('Ascii', 'Decimal', 'Hex', 'Binary'),
+    #                                   size=(100,25*len(self.inputAreas)))
+    #lowerAreaSizer2.Add(self.inputTypeRadios)
     # Connect Quick Buttons
     connectButtonSizer = wx.BoxSizer(wx.VERTICAL)
+    ## Connect/Disconnect Button
     self.connectButton = wx.Button(self, id=wx.ID_ANY, label="  Disconnect  ")
     self.connectButton.SetBackgroundColour(wx.Colour(255, 0, 0))
     self.Bind(wx.EVT_BUTTON, self.OnToggleConnectButton, self.connectButton)
     connectButtonSizer.Add(self.connectButton)
+    ## Auto Disconnect CheckBox
+    self.autoDisconnectCheck = wx.CheckBox(self, id=wx.ID_ANY,
+      label="Auto Disconnect")
+    connectButtonSizer.Add(self.autoDisconnectCheck)
+    lowerAreaSizer2.AddStretchSpacer()
     lowerAreaSizer2.Add(connectButtonSizer)
     mainSizer.Add(lowerAreaSizer, 0)
 
@@ -348,8 +361,10 @@ class randtermFrame(wx.Frame, Thread):
     try:
       self.serialCon.open()
     except serial.SerialException as ex:
+      self.autoDisconnectCheck.SetValue(False)
       wx.MessageDialog(None, str(ex), 'Serial Error', wx.OK | wx.ICON_ERROR).ShowModal()
       self.SetStatusText('Not Connected...')
+      self.connected = False
       return
 
     self.SetStatusText('Connected to ' + self.portName + ' ' + baudRadio.GetLabel() + 'bps')
@@ -398,8 +413,17 @@ class randtermFrame(wx.Frame, Thread):
     inputArea.SetSelection(0,-1)
     inputString = inputArea.GetString(0,-1)
 
+    inputAreaIdx = -1
+    for i in range(0, len(self.inputAreas)):
+      if inputArea == self.inputAreas[i]:
+        inputAreaIdx = i
+        break
+    if inputAreaIdx == -1:
+      print "ERROR! Bad Input Area!"
+      exit()
+
     inputVal = ''
-    typeString = self.inputTypeRadios.GetStringSelection()
+    typeString = self.inputFormats[i].GetStringSelection()
 
     if(typeString == 'Ascii'):
       inputVal = str(inputString)
@@ -447,6 +471,13 @@ class randtermFrame(wx.Frame, Thread):
       self.OnCloseConnection(None)
     else:
       self.OnSetConnection(None)
+
+  def OnActivate(self, event):
+    if self.autoDisconnectCheck.IsChecked():
+      if event.GetActive():
+        self.OnSetConnection(None)
+      else:
+        self.OnCloseConnection(None)
 
 
 app = wx.App(False)
