@@ -160,7 +160,7 @@ class randtermFrame(wx.Frame, Thread):
     lowerAreaSizer.Add(liveTypeSizer)
     liveTypeSizer.Add(wx.StaticText(self, wx.ID_ANY, " LiveType: "))
     self.liveType = wx.TextCtrl(self, wx.ID_ANY, '',
-                                style=wx.TE_LEFT|wx.TE_MULTILINE, size=(160,25))
+                                style=wx.TE_LEFT|wx.TE_MULTILINE|wx.TE_RICH, size=(160,25))
     liveTypeSizer.Add(self.liveType)
     self.Bind(wx.EVT_TEXT, self.OnSendLiveType, self.liveType)
     ## Input Array
@@ -201,6 +201,11 @@ class randtermFrame(wx.Frame, Thread):
     self.autoDisconnectCheck = wx.CheckBox(self, id=wx.ID_ANY,
       label="Auto Disconnect")
     connectButtonSizer.Add(self.autoDisconnectCheck)
+    ## Print Sent Data to Terminal CheckBox
+    self.printSentData = wx.CheckBox(self, id=wx.ID_ANY,
+      label="Print Sent Data to Terminal")
+    self.printSentData.SetValue(True) # checked by default
+    connectButtonSizer.Add(self.printSentData)        
     lowerAreaSizer2.AddStretchSpacer()
     lowerAreaSizer2.Add(connectButtonSizer)
     mainSizer.Add(lowerAreaSizer, 0)
@@ -404,7 +409,8 @@ class randtermFrame(wx.Frame, Thread):
       self.historyLock.acquire()
       self.history = self.history + newHistoryVals
       self.historyLock.release()
-      self.appendToDisplay(newHistoryVals)
+      if self.printSentData.IsChecked():
+        self.appendToDisplay(newHistoryVals)
       self.serialCon.write(inputString)
 
   ##################################################
@@ -450,7 +456,8 @@ class randtermFrame(wx.Frame, Thread):
       self.history = self.history + newHistoryVals
       self.historyLock.release()
       self.serialCon.write(inputVal)
-      self.appendToDisplay(newHistoryVals)
+      if self.printSentData.IsChecked():
+        self.appendToDisplay(newHistoryVals)
 
   ##################################################
   def OnAbout(self, event):
