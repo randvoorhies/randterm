@@ -1,6 +1,8 @@
 randterm
 ========
 
+<img src="https://raw.github.com/randvoorhies/randterm/master/OSX_Screenshot.png"></img>
+
 An open source full featured serial terminal written in Python
 
 RandTerm was created mainly to help debug microcontroller serial protocols, and
